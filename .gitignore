@@ -1,0 +1,27 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+env/
+venv/
+.venv/
+
+# Django/SQLite artifacts
+db.sqlite3
+db.sqlite3-journal
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE settings
+.idea/
+.vscode/
+
+# macOS/Linux system files
+.DS_Store
+*.swp
+
