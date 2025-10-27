@@ -138,3 +138,56 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 AUTH_USER_MODEL = 'users.User'
+
+# Logging configuration
+LOG_DIR = os.getenv("DJANGO_LOG_DIR", str(BASE_DIR / "logs"))
+if not os.path.isabs(LOG_DIR):
+    LOG_DIR = str(BASE_DIR / LOG_DIR)
+os.makedirs(LOG_DIR, exist_ok=True)
+
+DJANGO_REQUEST_LOG_LEVEL = os.getenv("DJANGO_REQUEST_LOG_LEVEL", "WARNING")
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{asctime}] {levelname} {name}: {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+        'file': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(LOG_DIR, 'app.log'),
+            'maxBytes': 1024 * 1024 * 5,  # 5MB
+            'backupCount': 5,
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['console', 'file'],
+        'level': os.getenv("DJANGO_LOG_LEVEL", "INFO"),
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console', 'file'],
+            'level': os.getenv("DJANGO_BACKEND_LOG_LEVEL", "INFO"),
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['file'],
+            'level': DJANGO_REQUEST_LOG_LEVEL,
+            'propagate': False,
+        },
+        'telegram_bot': {
+            'handlers': ['console', 'file'],
+            'level': os.getenv("TELEGRAM_BOT_LOG_LEVEL", "INFO"),
+            'propagate': False,
+        },
+    },
+}

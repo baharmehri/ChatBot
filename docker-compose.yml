@@ -8,4 +8,5 @@ services:
       - .env
     volumes:
       - ./db.sqlite3:/app/db.sqlite3
+      - ./logs:/app/logs
     restart: unless-stopped

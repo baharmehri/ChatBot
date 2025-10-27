@@ -11,6 +11,7 @@ venv/
 # Django/SQLite artifacts
 db.sqlite3
 db.sqlite3-journal
+logs/
 
 # Environment files
 .env
@@ -24,4 +25,3 @@ db.sqlite3-journal
 # macOS/Linux system files
 .DS_Store
 *.swp
-
