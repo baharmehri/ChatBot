@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -90,37 +91,125 @@ def get_measurements(measure_type: str, limit: Optional[int]) -> str:
     return "نوع اندازه‌گیری نامعتبر است. از 'blood_sugar' یا 'blood_pressure' استفاده کنید."
 
 
-def get_lab_results(parameter_name: str, limit: Optional[int]) -> str:
-    """
-    نتایج آزمایش بر اساس نام پارامتر (مثلاً HbA1c، Na، LDL) را جستجو و به صورت فهرست برمی‌گرداند.
-    """
-    if not parameter_name:
-        return "لطفاً نام پارامتر آزمایش را وارد کنید."
+def _parse_ts_to_datetime(value: Optional[str]) -> datetime:
+    """تبدیل امن رشتهٔ تاریخ به datetime با پشتیبانی از ISO و timezone"""
+    if not value:
+        return datetime.min.replace(tzinfo=timezone.utc)
+    normalized = value.replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(normalized)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except ValueError:
+        try:
+            d = datetime.strptime(normalized.split("T")[0], "%Y-%m-%d")
+            return d.replace(tzinfo=timezone.utc)
+        except ValueError:
+            return datetime.min.replace(tzinfo=timezone.utc)
 
+
+def get_labs(parameter_name: Optional[str], limit: Optional[int]) -> str:
+    """
+    تحلیل آخرین آزمایش کاربر.
+    - اگر پارامتر خاصی مشخص نشده باشد، فقط آخرین آزمایش تحلیل می‌شود.
+    - فقط پارامترهای غیرطبیعی (tag=2) یا نیازمند تفسیر (tag=0) نمایش داده می‌شوند.
+    - اگر آزمایش مربوط به بیش از ۳۰ روز قبل باشد، فقط اطلاع‌رسانی انجام می‌شود.
+    """
     data = _load_data()
     labs = data.get("labs", [])
-    limit = limit if limit is not None else 5
-    limit = max(1, min(limit, 10))
-    key = parameter_name.lower()
+    if not labs:
+        return "هیچ آزمایش ثبت نشده است."
 
-    matches: List[str] = []
-    for lab in labs:
-        for param in lab.get("parameters", []):
-            name = (param.get("name") or "").lower()
-            if key in name:
-                matches.append(
-                    f"- تاریخ {lab.get('occurred_at', 'نامشخص')} | "
-                    f"{param.get('name', 'پارامتر')} = {param.get('value', '؟')} {param.get('unit', '')}"
-                )
-                if len(matches) >= limit:
-                    break
-        if len(matches) >= limit:
+    # مرتب‌سازی آزمایش‌ها بر اساس تاریخ
+    sorted_labs = sorted(labs, key=lambda lab: _parse_ts_to_datetime(lab.get("occurred_at")), reverse=True)
+    latest_lab = sorted_labs[0]
+    latest_lab_dt = _parse_ts_to_datetime(latest_lab.get("occurred_at"))
+
+    # فاصله زمانی از امروز
+    days_diff = (datetime.now(timezone.utc).date() - latest_lab_dt.date()).days
+    info_note = ""
+    if days_diff > 30:
+        info_note = "توجه: این نتایج مربوط به آزمایش قبلی هستند و ممکن است وضعیت فعلی شما را به‌طور کامل نشان ندهند.\n\n"
+
+    status_map = {
+        2: "خارج از محدوده طبیعی گزارش شده است",
+        1: "در محدوده طبیعی است",
+        0: "وضعیت آزمایش نامشخص است",
+    }
+
+    search_key = (parameter_name or "").strip().lower() or None
+
+    # حالت ۱: تحلیل کامل آخرین آزمایش
+    if not search_key:
+        occurred_at = latest_lab.get("occurred_at", "نامشخص")
+        source = latest_lab.get("source", "نامشخص")
+        params = latest_lab.get("parameters", [])
+
+        if not params:
+            return "هیچ پارامتری در آخرین آزمایش یافت نشد."
+
+        abnormal = [p for p in params if p.get("tag") in (0, 2)]
+        normal = [p for p in params if p.get("tag") == 1]
+
+        lines: List[str] = [info_note + f"تحلیل آخرین آزمایش ثبت‌شده ({occurred_at}، منبع: {source}):"]
+
+        if abnormal:
+            lines.append("پارامترهای غیرطبیعی یا نیازمند تفسیر:")
+            for p in abnormal:
+                name = p.get("name", "پارامتر")
+                val = p.get("value")
+                unit = p.get("unit") or ""
+                tag = p.get("tag")
+                val_text = "نامشخص" if val is None else str(val)
+                lines.append(f"- {name} = {val_text}{(' ' + unit) if unit else ''} ({status_map[tag]})")
+
+        if abnormal and normal:
+            lines.append("سایر پارامترهای این آزمایش در محدوده طبیعی بوده و جای نگرانی نیست.")
+        elif not abnormal and normal:
+            lines.append("تمام پارامترهای این آزمایش در محدوده طبیعی هستند.")
+        elif not abnormal and not normal:
+            lines.append("هیچ پارامتر قابل تفسیر در این آزمایش وجود ندارد.")
+
+        return "\n".join(lines)
+
+    # حالت ۲: اگر کاربر پارامتر خاصی خواسته باشد (مثلاً HbA1c)
+    limit = limit if limit is not None else 3
+    limit = max(1, min(limit, 5))
+
+    results = []
+    count_abnormal = 0
+
+    for lab in sorted_labs:
+        params = lab.get("parameters", [])
+        filtered = [p for p in params if search_key in (p.get("name") or "").lower()]
+        if not filtered:
+            continue
+
+        occurred_at = lab.get("occurred_at", "نامشخص")
+        source = lab.get("source", "نامشخص")
+
+        for p in filtered:
+            name = p.get("name", "پارامتر")
+            val = p.get("value")
+            unit = p.get("unit") or ""
+            tag = p.get("tag")
+            val_text = "نامشخص" if val is None else str(val)
+            results.append(
+                f"- {name} = {val_text}{(' ' + unit) if unit else ''} ({status_map[tag]})، تاریخ {occurred_at}")
+            if tag in (0, 2):
+                count_abnormal += 1
+
+        if len(results) >= limit:
             break
 
-    if not matches:
-        return "آزمایشی با این نام پارامتر پیدا نشد."
+    if not results:
+        return f"آزمایشی برای پارامتر {parameter_name} پیدا نشد."
 
-    return "نتایج آزمایش موردنظر:\n" + "\n".join(matches)
+    summary = f"تحلیل نتایج پارامتر {parameter_name}:\n\n" + "\n".join(results)
+    if count_abnormal:
+        summary += f"\n\nدر مجموع {count_abnormal} مورد غیرطبیعی یا نیازمند تفسیر مشاهده شد."
+    return info_note + summary
 
 
 def get_medication_schedule(active_only: Optional[bool]) -> str:
