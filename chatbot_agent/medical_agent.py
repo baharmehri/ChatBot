@@ -7,8 +7,10 @@ from google.adk.tools import FunctionTool
 from chatbot_agent.base_agent import BaseAgent
 from chatbot_agent.medical_tools import (
     get_measurements,
+    get_medical_history_summary,
     get_medication_schedule,
     get_user_profile_summary,
+    get_weight_trend,
     get_labs,
 )
 
@@ -21,6 +23,8 @@ MEDICAL_AGENT_PROMPT = f"""
 ✅ قوانین کلی:
 - همیشه قبل از پاسخ از ابزارهای زیر برای دریافت داده‌ها استفاده کن:
   - خلاصه اطلاعات هویتی → get_user_profile_summary
+  - سابقه پزشکی شخصی و خانوادگی → get_medical_history_summary (در صورت شک include_family=True)
+  - روند وزن و تحلیل تغییرات → get_weight_trend (limit بین 3 تا 7، در صورت شک 5)
   - فشار یا قند خون → get_measurements (measure_type = blood_sugar یا blood_pressure، در صورت شک limit=5)
   - برای تحلیل آزمایش‌ها از ابزار get_labs استفاده کن:
     - اگر کاربر نام پارامتر خاصی مانند HbA1c، TSH، Na و ... را ذکر کرد، مقدار parameter_name را همان نام بگذار.
@@ -32,6 +36,8 @@ MEDICAL_AGENT_PROMPT = f"""
 - تاریخ‌ها همیشه به فرمت میلادی (YYYY-MM-DD یا ISO) ارائه می‌شوند.
 - اگر تاریخ آخرین داده مربوط به فشار خون، قند خون یا وزن بیش از ۵ روز قبل از تاریخ امروز است، هیچ نتیجه‌گیری نکن و فقط بگو:
   «آخرین داده مربوط به بیش از ۵ روز پیش است. لطفاً دادهٔ جدیدی ثبت کنید تا بتوانم نتیجه دقیق‌تری بگویم.»
+- اگر کاربر دربارهٔ وزن یا تغییرات وزن سؤال پرسید، با get_weight_trend آخرین وزن و روند افزایش/کاهش را دقیق گزارش کن و فقط بر اساس داده‌ها صحبت کن.
+- اگر سؤال کاربر دربارهٔ سابقه بیماری‌های زمینه ای خودش یا خانواده‌اش بود یا سوالی که پرسید ارتباطی با بیماری زمینه ای داشت، حتماً از get_medical_history_summary استفاده کن و نتیجه را دقیق گزارش بده.
 
 - اما در مورد آزمایش‌های خونی (lab results)، حتی اگر تاریخ آن قدیمی باشد، تحلیل را انجام بده و صرفاً در پاسخ یادآوری کن که:
   «این نتایج مربوط به آزمایش قبلی هستند و ممکن است وضعیت فعلی شما را به‌طور کامل نشان ندهند.»
@@ -64,6 +70,8 @@ class PersianMedicalAgent(BaseAgent):
     def __init__(self, user_id: str):
         tools = [
             FunctionTool(get_user_profile_summary),
+            FunctionTool(get_medical_history_summary),
+            FunctionTool(get_weight_trend),
             FunctionTool(get_measurements),
             FunctionTool(get_labs),
             FunctionTool(get_medication_schedule),

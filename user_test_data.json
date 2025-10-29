@@ -8,7 +8,36 @@
   },
   "body": {
     "height_cm": 179,
-    "weight_kg": 89,
+    "weight_kg": [
+      {
+        "date": "2025-11-01",
+        "value": 89
+      },
+      {
+        "date": "2025-09-30",
+        "value": 89
+      },
+      {
+        "date": "2025-08-30",
+        "value": 90
+      },
+      {
+        "date": "2025-08-15",
+        "value": 90
+      },
+      {
+        "date": "2025-07-30",
+        "value": 92
+      },
+      {
+        "date": "2025-07-15",
+        "value": 94
+      },
+      {
+        "date": "2025-06-30",
+        "value": 95
+      }
+    ],
     "blood suger": [
       {
         "date": "2025-09-04",
@@ -767,7 +796,7 @@
       ]
     }
   ],
-  "brief medical history": [
+  "brief_medical_history": [
     {
       "diseaseType": "DYSLIPIDEMIA_DISEASE",
       "age": 37
@@ -775,6 +804,12 @@
     {
       "diseaseType": "DIABETES_TYPE_2",
       "age": null
+    }
+  ],
+  "family_brief_medical_history": [
+    {
+      "diseaseType": "DIABETES_TYPE_2",
+      "relation": "mother"
     }
   ],
   "medications": [
