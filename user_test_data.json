@@ -812,6 +812,19 @@
       "relation": "mother"
     }
   ],
+  "life_style": {
+    "workout_rate": 0,
+    "fruit_usage": 2,
+    "rice_usage": 3,
+    "processed_food_usage": 4,
+    "hookah_smoking": "N",
+    "hookah_smoking_years": null,
+    "hookah_smoking_count_a_day": null,
+    "smoking": "N",
+    "smoking_years": 3,
+    "smoking_count_a_day": null,
+    "alcohol_drink": "L"
+  },
   "medications": [
     {
       "medication_id": 43,

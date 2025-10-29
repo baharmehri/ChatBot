@@ -25,6 +25,40 @@ _RELATION_LABELS = {
     "wife": "همسر",
     "husband": "همسر",
 }
+WORKOUT_RATE_DESCRIPTIONS = {
+    0: "ورزش متوسط کمتر از ۳ ساعت در هفته",
+    1: "ورزش شدید کمتر از یک ساعت در هفته",
+    2: "ورزش متوسط بین ۱ تا ۳ ساعت در هفته",
+    3: "ورزش شدید بین ۱ تا ۳ ساعت در هفته",
+    4: "فعالیت ورزشی نامنظم در طول روز",
+    5: "بدون فعالیت ورزشی منظم",
+    6: "فعالیت در سطح ورزشکار حرفه‌ای",
+}
+
+FRUIT_USAGE_DESCRIPTIONS = {
+    0: "مصرف میوه کمتر از یک‌بار در هفته",
+    1: "مصرف میوه ۱ تا ۴ بار در هفته",
+    2: "مصرف میوه بیش از ۵ بار در هفته",
+    3: "مصرف میوه ۱ تا ۳ بار در روز",
+    4: "مصرف میوه بیش از ۳ بار در روز",
+}
+
+FOOD_USAGE_DESCRIPTIONS = {
+    0: "کمتر از یک‌بار در ماه",
+    1: "۱ تا ۳ بار در ماه",
+    2: "۱ تا ۳ بار در هفته",
+    3: "۴ تا ۶ بار در هفته",
+    4: "۱ تا ۲ بار در روز",
+    5: "بیش از ۳ بار در روز",
+}
+
+TOBACCO_ALCOHOL_STATUS = {
+    "N": "مصرف نمی‌کند",
+    "Y": "مصرف می‌کند",
+    "L": "مصرف می‌کند",
+    "S": "در گذشته مصرف می‌کرد",
+    "W": "شش ماه گذشته مصرف نداشته است",
+}
 
 
 def _translate_disease(code: Optional[str]) -> str:
@@ -39,6 +73,40 @@ def _translate_relation(code: Optional[str]) -> str:
         return "نسبت نامشخص"
     key = code.strip().lower()
     return _RELATION_LABELS.get(key, code)
+
+
+def _describe_lifestyle_value(value: Optional[int], descriptions: Dict[int, str]) -> str:
+    if value is None:
+        return "نامشخص"
+    try:
+        numeric_value = int(value)
+    except (TypeError, ValueError):
+        return "نامشخص"
+    return descriptions.get(numeric_value, "نامشخص")
+
+
+def _describe_tobacco_alcohol(code: Optional[str]) -> str:
+    if not code:
+        return "نامشخص"
+    normalized = str(code).strip().upper()
+    return TOBACCO_ALCOHOL_STATUS.get(normalized, "نامشخص")
+
+
+def _is_positive_number(value: Optional[float]) -> bool:
+    try:
+        return float(value) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _format_number(value: Optional[float]) -> str:
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return "نامشخص"
+    if num.is_integer():
+        return str(int(num))
+    return str(round(num, 1))
 
 
 def _data_path() -> Path:
@@ -121,6 +189,112 @@ def get_medical_history_summary(include_family: Optional[bool] = None) -> str:
         return "هیچ سابقه پزشکی ثبت نشده است."
 
     return "\n\n".join(filtered_sections)
+
+
+def get_lifestyle_summary(
+    include_diet: Optional[bool] = None,
+    include_activity: Optional[bool] = None,
+    include_consumption: Optional[bool] = None,
+) -> str:
+    """
+    خلاصه‌ای از عادات سبک زندگی کاربر (ورزش، تغذیه، مصرف دخانیات و الکل) را ارائه می‌دهد.
+    """
+    data = _load_data()
+    lifestyle = data.get("life_style") or {}
+
+    if not lifestyle:
+        return "هیچ داده‌ای درباره سبک زندگی ثبت نشده است."
+
+    include_activity = True if include_activity is None else bool(include_activity)
+    include_diet = True if include_diet is None else bool(include_diet)
+    include_consumption = True if include_consumption is None else bool(include_consumption)
+
+    sections: List[str] = []
+
+    if include_activity:
+        workout_rate = lifestyle.get("workout_rate")
+        workout_desc = _describe_lifestyle_value(workout_rate, WORKOUT_RATE_DESCRIPTIONS)
+        activity_lines = ["فعالیت بدنی:"]
+        if workout_desc == "نامشخص":
+            activity_lines.append("- اطلاعاتی درباره سطح فعالیت بدنی ثبت نشده است.")
+        else:
+            activity_lines.append(f"- سطح تمرین: {workout_desc}")
+        sections.append("\n".join(activity_lines))
+
+    if include_diet:
+        fruit_usage = lifestyle.get("fruit_usage")
+        rice_usage = lifestyle.get("rice_usage")
+        processed_food_usage = lifestyle.get("processed_food_usage")
+
+        diet_lines = ["عادات تغذیه‌ای:"]
+        diet_entries = []
+
+        fruit_desc = _describe_lifestyle_value(fruit_usage, FRUIT_USAGE_DESCRIPTIONS)
+        if fruit_desc != "نامشخص":
+            diet_entries.append(f"- مصرف میوه: {fruit_desc}")
+
+        rice_desc = _describe_lifestyle_value(rice_usage, FOOD_USAGE_DESCRIPTIONS)
+        if rice_desc != "نامشخص":
+            diet_entries.append(f"- مصرف برنج: {rice_desc}")
+
+        processed_desc = _describe_lifestyle_value(processed_food_usage, FOOD_USAGE_DESCRIPTIONS)
+        if processed_desc != "نامشخص":
+            diet_entries.append(f"- مصرف غذای آماده/فست‌فود: {processed_desc}")
+
+        if diet_entries:
+            diet_lines.extend(diet_entries)
+        else:
+            diet_lines.append("- اطلاعات تغذیه‌ای ثبت نشده است.")
+        sections.append("\n".join(diet_lines))
+
+    if include_consumption:
+        hookah_status = _describe_tobacco_alcohol(lifestyle.get("hookah_smoking"))
+        smoking_status = _describe_tobacco_alcohol(lifestyle.get("smoking"))
+        alcohol_status = _describe_tobacco_alcohol(lifestyle.get("alcohol_drink"))
+
+        consumption_lines = ["مصرف دخانیات و الکل:"]
+        entries: List[str] = []
+
+        if hookah_status != "نامشخص":
+            hookah_years = lifestyle.get("hookah_smoking_years")
+            hookah_daily = lifestyle.get("hookah_smoking_count_a_day")
+            details: List[str] = []
+            if _is_positive_number(hookah_years):
+                details.append(f"{_format_number(hookah_years)} سال سابقه")
+            if _is_positive_number(hookah_daily):
+                details.append(f"{_format_number(hookah_daily)} مرتبه در روز")
+            if details:
+                entries.append(f"- وضعیت قلیان: {hookah_status} ({'، '.join(details)})")
+            else:
+                entries.append(f"- وضعیت قلیان: {hookah_status}")
+
+        if smoking_status != "نامشخص":
+            smoking_years = lifestyle.get("smoking_years")
+            smoking_daily = lifestyle.get("smoking_count_a_day")
+            details = []
+            if _is_positive_number(smoking_years):
+                details.append(f"{_format_number(smoking_years)} سال سابقه")
+            if _is_positive_number(smoking_daily):
+                details.append(f"{_format_number(smoking_daily)} عدد در روز")
+            if details:
+                entries.append(f"- وضعیت سیگار: {smoking_status} ({'، '.join(details)})")
+            else:
+                entries.append(f"- وضعیت سیگار: {smoking_status}")
+
+        if alcohol_status != "نامشخص":
+            entries.append(f"- وضعیت مصرف الکل: {alcohol_status}")
+
+        if entries:
+            consumption_lines.extend(entries)
+        else:
+            consumption_lines.append("- اطلاعاتی درباره مصرف دخانیات یا الکل ثبت نشده است.")
+        sections.append("\n".join(consumption_lines))
+
+    sections = [section for section in sections if section]
+    if not sections:
+        return "هیچ داده‌ای درباره سبک زندگی ثبت نشده است."
+
+    return "\n\n".join(sections)
 
 
 def get_weight_trend(limit: Optional[int] = None) -> str:
