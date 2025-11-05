@@ -30,6 +30,52 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Clear the current conversation session for the chat."""
+    message = update.message
+    if not message:
+        return
+
+    user = update.effective_user
+    user_id = str(user.id if user else message.chat_id)
+    session_id = str(message.chat_id)
+    text = message.text or "/reset"
+    user_metadata = _build_user_metadata(user, message.chat_id)
+
+    django_user = await _get_or_create_user(user, message.chat_id)
+
+    await _store_chat_message(
+        role=ChatMessage.ROLE_USER,
+        user=django_user,
+        external_user_id=user_id,
+        session_id=session_id,
+        text=text,
+        metadata=dict(user_metadata),
+    )
+
+    reply = "گفتگو پاک شد. لطفاً سوال جدیدی ارسال کنید."
+    try:
+        agent = await PersianMedicalAgent.create(user_id=user_id, session_id=session_id)
+        await agent.reset_session(session_id=session_id)
+    except Exception:  # pragma: no cover - defensive
+        logger.exception("Failed to reset session %s", session_id)
+        reply = "در بازنشانی گفتگو خطایی رخ داد، لطفاً بعداً دوباره تلاش کنید."
+
+    try:
+        await message.reply_text(reply)
+    except TelegramTimedOut:
+        logger.warning("Failed to send reset reply to chat %s due to Telegram timeout.", session_id)
+    finally:
+        await _store_chat_message(
+            role=ChatMessage.ROLE_ASSISTANT,
+            user=django_user,
+            external_user_id=user_id,
+            session_id=session_id,
+            text=reply,
+            metadata=dict(user_metadata),
+        )
+
+
 async def medical_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Relay user questions to the Persian medical agent."""
     message = update.message
@@ -88,6 +134,7 @@ def build_application(token: str | None = None):
 
     application = ApplicationBuilder().token(bot_token).build()
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("reset", reset))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, medical_chat))
     return application
 
