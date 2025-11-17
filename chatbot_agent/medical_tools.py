@@ -488,6 +488,62 @@ def add_weight_measurement(value: float, measurement_date: Optional[str] = None)
     return f"رکورد وزن {stored_value} کیلوگرم در تاریخ {measurement_date_iso} ذخیره شد."
 
 
+def add_blood_pressure_measurement(
+        systolic: float,
+        diastolic: float,
+        measurement_date: Optional[str] = None,
+) -> str:
+    try:
+        numeric_systolic = float(systolic)
+        numeric_diastolic = float(diastolic)
+    except (TypeError, ValueError):
+        return "مقادیر فشار خون وارد شده نامعتبر است."
+    if numeric_systolic <= 0 or numeric_diastolic <= 0:
+        return "مقادیر فشار خون باید بزرگ‌تر از صفر باشند."
+
+    systolic_value = (
+        int(numeric_systolic)
+        if numeric_systolic.is_integer()
+        else round(numeric_systolic, 1)
+    )
+    diastolic_value = (
+        int(numeric_diastolic)
+        if numeric_diastolic.is_integer()
+        else round(numeric_diastolic, 1)
+    )
+
+    date_str = (measurement_date or "").strip()
+    if date_str:
+        parsed_date = _parse_ts_to_datetime(date_str)
+        if parsed_date == datetime.min.replace(tzinfo=timezone.utc):
+            return "تاریخ وارد شده نامعتبر است. لطفاً تاریخ را به‌صورت YYYY-MM-DD ارسال کنید."
+        measurement_date_iso = parsed_date.date().isoformat()
+    else:
+        measurement_date_iso = date.today().isoformat()
+
+    data = _load_data()
+    body = data.setdefault("body", {})
+    records = body.get("blood pressure")
+    if not isinstance(records, list):
+        records = []
+        body["blood pressure"] = records
+
+    records.insert(
+        0,
+        {
+            "date": measurement_date_iso,
+            "systolic": systolic_value,
+            "diastolic": diastolic_value,
+        },
+    )
+
+    _persist_data(data)
+    return (
+        f"رکورد فشار خون {systolic_value}/{diastolic_value} mmHg "
+        f"در تاریخ {measurement_date_iso} ذخیره شد."
+    )
+
+
 def add_blood_sugar_measurement(
         value: float,
         state: Optional[str] = None,
