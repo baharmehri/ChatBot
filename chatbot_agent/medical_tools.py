@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -59,6 +59,15 @@ TOBACCO_ALCOHOL_STATUS = {
     "S": "در گذشته مصرف می‌کرد",
     "W": "شش ماه گذشته مصرف نداشته است",
 }
+
+BLOOD_SUGAR_MEASURE_TIMES = [
+    ("FBS", "ناشتا"),
+    ("PBS", "دو ساعته بعد از صبحانه"),
+    ("PLS", "دو ساعته بعد از ناهار"),
+    ("PDS", "دو ساعته بعد از شام"),
+    ("RBS", "رندم"),
+]
+_BLOOD_SUGAR_STATE_LABELS = {code: label for code, label in BLOOD_SUGAR_MEASURE_TIMES}
 
 
 def _translate_disease(code: Optional[str]) -> str:
@@ -126,6 +135,18 @@ def _load_data() -> Dict:
         )
     with path.open(encoding="utf-8") as fp:
         return json.load(fp)
+
+
+def _persist_data(data: Dict) -> None:
+    """
+    Persist the updated medical dataset and reset the cache so subsequent reads
+    observe the latest data.
+    """
+    path = _data_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as fp:
+        json.dump(data, fp, ensure_ascii=False, indent=2)
+    _load_data.cache_clear()
 
 
 def get_user_profile_summary() -> str:
@@ -409,7 +430,7 @@ def get_measurements(measure_type: str, limit: Optional[int]) -> str:
             return "رکوردی برای قند خون موجود نیست."
         lines = ["آخرین مقادیر قند خون:"]
         for entry in records[:limit]:
-            state = entry.get("state", "نامشخص")
+            state = _describe_blood_sugar_state(entry.get("state"))
             lines.append(
                 f"- تاریخ {entry.get('date', 'نامشخص')} | مقدار {entry.get('value', 'نامشخص')} mg/dL | وضعیت: {state}"
             )
@@ -430,6 +451,77 @@ def get_measurements(measure_type: str, limit: Optional[int]) -> str:
     return "نوع اندازه‌گیری نامعتبر است. از 'blood_sugar' یا 'blood_pressure' استفاده کنید."
 
 
+def add_blood_sugar_measurement(
+    value: float,
+    state: Optional[str] = None,
+    measurement_date: Optional[str] = None,
+) -> str:
+    """
+    رکورد جدید قند خون را به فایل داده کاربر اضافه می‌کند.
+    - value: مقدار قند خون بر حسب mg/dL.
+    - state: وضعیت اندازه‌گیری (یکی از FBS، PBS، PLS، PDS، RBS). اگر خالی باشد "نامشخص" ذخیره می‌شود.
+    - measurement_date: تاریخ اندازه‌گیری به فرمت ISO. در صورت عدم ارسال، تاریخ امروز ذخیره می‌شود.
+    """
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError):
+        return "مقدار قند خون وارد شده نامعتبر است."
+    if numeric_value <= 0:
+        return "مقدار قند خون باید بزرگ‌تر از صفر باشد."
+
+    stored_value = int(numeric_value) if numeric_value.is_integer() else round(numeric_value, 1)
+
+    date_str = (measurement_date or "").strip()
+    if date_str:
+        parsed_date = _parse_ts_to_datetime(date_str)
+        if parsed_date == datetime.min.replace(tzinfo=timezone.utc):
+            return "تاریخ وارد شده نامعتبر است. لطفاً تاریخ را به‌صورت YYYY-MM-DD ارسال کنید."
+        measurement_date_iso = parsed_date.date().isoformat()
+    else:
+        measurement_date_iso = date.today().isoformat()
+
+    state_value = (state or "").strip()
+    if not state_value:
+        state_code = "نامشخص"
+    else:
+        normalized = state_value.upper()
+        if normalized in _BLOOD_SUGAR_STATE_LABELS:
+            state_code = normalized
+        else:
+            matching_code = next(
+                (code for code, label in BLOOD_SUGAR_MEASURE_TIMES if label == state_value),
+                None,
+            )
+            if matching_code:
+                state_code = matching_code
+            else:
+                allowed = ", ".join(code for code, _ in BLOOD_SUGAR_MEASURE_TIMES)
+                return f"وضعیت اندازه‌گیری نامعتبر است. مقادیر مجاز: {allowed}"
+
+    data = _load_data()
+    body = data.setdefault("body", {})
+    records = body.get("blood suger")
+    if not isinstance(records, list):
+        records = []
+        body["blood suger"] = records
+
+    records.insert(
+        0,
+        {
+            "date": measurement_date_iso,
+            "value": stored_value,
+            "state": state_code,
+        },
+    )
+
+    _persist_data(data)
+    state_text = _describe_blood_sugar_state(state_code)
+    return (
+        f"رکورد قند خون {stored_value} با وضعیت {state_text} "
+        f"در تاریخ {measurement_date_iso} ذخیره شد."
+    )
+
+
 def _parse_ts_to_datetime(value: Optional[str]) -> datetime:
     """تبدیل امن رشتهٔ تاریخ به datetime با پشتیبانی از ISO و timezone"""
     if not value:
@@ -446,6 +538,16 @@ def _parse_ts_to_datetime(value: Optional[str]) -> datetime:
             return d.replace(tzinfo=timezone.utc)
         except ValueError:
             return datetime.min.replace(tzinfo=timezone.utc)
+
+
+def _describe_blood_sugar_state(state: Optional[str]) -> str:
+    if not state:
+        return "نامشخص"
+    normalized = str(state).strip().upper()
+    label = _BLOOD_SUGAR_STATE_LABELS.get(normalized)
+    if label:
+        return f"{normalized} ({label})"
+    return normalized or "نامشخص"
 
 
 def get_labs(parameter_name: Optional[str], limit: Optional[int]) -> str:
