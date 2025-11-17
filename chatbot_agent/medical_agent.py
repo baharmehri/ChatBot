@@ -7,6 +7,7 @@ from google.adk.tools import FunctionTool
 from chatbot_agent.base_agent import BaseAgent
 from chatbot_agent.medical_tools import (
     add_blood_sugar_measurement,
+    add_weight_measurement,
     get_measurements,
     get_medical_history_summary,
     get_lifestyle_summary,
@@ -30,6 +31,7 @@ MEDICAL_AGENT_PROMPT = f"""
   - روند وزن و تحلیل تغییرات → get_weight_trend (limit بین 3 تا 7، در صورت شک 5)
   - فشار یا قند خون → get_measurements (measure_type = blood_sugar یا blood_pressure، در صورت شک limit=5)
   - ثبت مقدار جدید قند خون → add_blood_sugar_measurement (value=عدد اعلام‌شده، state=یکی از FBS/PBS/PLS/PDS/RBS، measurement_date=در صورت اشاره کاربر به تاریخ)
+  - ثبت مقدار جدید وزن → add_weight_measurement (value=عدد اعلام‌شده بر حسب کیلوگرم، measurement_date=در صورت اشاره کاربر به تاریخ)
   - برای تحلیل آزمایش‌ها از ابزار get_labs استفاده کن:
     - اگر کاربر نام پارامتر خاصی مانند HbA1c، TSH، Na و ... را ذکر کرد، مقدار parameter_name را همان نام بگذار.
     - اگر کاربر نام خاصی ذکر نکرد (مثل "تحلیل کامل آزمایش من" یا "آخرین آزمایشم چی بوده؟")، مقدار parameter_name را None بگذار تا کل پنل آزمایش تحلیل شود.
@@ -39,6 +41,7 @@ MEDICAL_AGENT_PROMPT = f"""
 ⚠️ محدودیت‌ها:
 - تاریخ‌ها همیشه به فرمت میلادی (YYYY-MM-DD یا ISO) ارائه می‌شوند.
 - اگر کاربر عدد جدید قند خون ارسال کرد و مشخص بود که قصد ثبت آن را دارد، حتماً ابزار add_blood_sugar_measurement را با پارامترهای مناسب صدا بزن (اگر تاریخ نگفته بود، measurement_date را خالی بگذار تا تاریخ امروز ثبت شود).
+- اگر کاربر وزن جدید خود را برای ثبت اعلام کرد، ابزار add_weight_measurement را مشابه همان منطق (value و در صورت اشاره measurement_date) صدا بزن.
 - اگر تاریخ آخرین داده مربوط به فشار خون، قند خون یا وزن بیش از ۵ روز قبل از تاریخ امروز است، هیچ نتیجه‌گیری نکن و فقط بگو:
   «آخرین داده مربوط به بیش از ۵ روز پیش است. لطفاً دادهٔ جدیدی ثبت کنید تا بتوانم نتیجه دقیق‌تری بگویم.»
 - اگر کاربر دربارهٔ وزن یا تغییرات وزن سؤال پرسید، با get_weight_trend آخرین وزن و روند افزایش/کاهش را دقیق گزارش کن و فقط بر اساس داده‌ها صحبت کن.
@@ -76,6 +79,7 @@ class PersianMedicalAgent(BaseAgent):
     def __init__(self, user_id: str):
         tools = [
             FunctionTool(add_blood_sugar_measurement),
+            FunctionTool(add_weight_measurement),
             FunctionTool(get_user_profile_summary),
             FunctionTool(get_medical_history_summary),
             FunctionTool(get_lifestyle_summary),
