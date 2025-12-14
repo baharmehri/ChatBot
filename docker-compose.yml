@@ -2,10 +2,23 @@ services:
   telegram-bot:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Docker/Dockerfile
     command: python manage.py runtelegrambot
     env_file:
       - .env
+    volumes:
+      - ./:/app
+    restart: unless-stopped
+
+  adk-web:
+    build:
+      context: .
+      dockerfile: Docker/Dockerfile.adkweb
+    container_name: chatbot-adk-web
+    env_file:
+      - .env
+    ports:
+      - "8001:8000"
     volumes:
       - ./:/app
     restart: unless-stopped

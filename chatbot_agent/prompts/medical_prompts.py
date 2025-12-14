@@ -1,22 +1,4 @@
-from __future__ import annotations
-
 from datetime import date
-
-from google.adk.tools import FunctionTool
-
-from chatbot_agent.base_agent import BaseAgent
-from chatbot_agent.medical_tools import (
-    add_blood_pressure_measurement,
-    add_blood_sugar_measurement,
-    add_weight_measurement,
-    get_measurements,
-    get_medical_history_summary,
-    get_lifestyle_summary,
-    get_medication_schedule,
-    get_user_profile_summary,
-    get_weight_trend,
-    get_labs,
-)
 
 today = date.today().isoformat()
 MEDICAL_AGENT_PROMPT = f"""
@@ -72,39 +54,3 @@ MEDICAL_AGENT_PROMPT = f"""
   «من فقط دربارهٔ سلامت و موضوعات پزشکی پاسخ می‌دهم.»
 
 """
-
-
-class PersianMedicalAgent(BaseAgent):
-    """
-    Medical chatbot specialized for answering Persian queries using structured user data.
-    """
-
-    def __init__(self, user_id: str):
-        tools = [
-            FunctionTool(add_blood_pressure_measurement),
-            FunctionTool(add_blood_sugar_measurement),
-            FunctionTool(add_weight_measurement),
-            FunctionTool(get_user_profile_summary),
-            FunctionTool(get_medical_history_summary),
-            FunctionTool(get_lifestyle_summary),
-            FunctionTool(get_weight_trend),
-            FunctionTool(get_measurements),
-            FunctionTool(get_labs),
-            FunctionTool(get_medication_schedule),
-        ]
-
-        super().__init__(
-            user_id=user_id,
-            agent_name="PersianMedicalAgent",
-            instruction=MEDICAL_AGENT_PROMPT,
-            tools=tools,
-        )
-
-    @classmethod
-    async def create(cls, user_id: str, session_id: str) -> "PersianMedicalAgent":
-        instance = cls(user_id=user_id)
-        return await instance._async_init(session_id=session_id)
-
-# Example usage:
-# agent = await PersianMedicalAgent.create(user_id="123", session_id="conv-1")
-# answer = await agent.call_agent_async("آخرین نتایج قند خونم را بگو")
