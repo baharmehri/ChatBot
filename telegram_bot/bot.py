@@ -13,9 +13,9 @@ from telegram.ext import (
 )
 from telegram.error import TimedOut as TelegramTimedOut
 
-from chatbot_agent.medical_agent import PersianMedicalAgent
 from asgiref.sync import sync_to_async
 
+from chatbot_agent.agents.medical_runtime_agent import PersianMedicalAgent
 from .models import ChatMessage
 
 logger = logging.getLogger(__name__)
@@ -155,13 +155,13 @@ def _build_user_metadata(user, chat_id: int) -> Dict[str, Any]:
 
 
 async def _store_chat_message(
-    *,
-    role: str,
-    user,
-    external_user_id: str,
-    session_id: str,
-    text: str,
-    metadata: Dict[str, Any] | None = None,
+        *,
+        role: str,
+        user,
+        external_user_id: str,
+        session_id: str,
+        text: str,
+        metadata: Dict[str, Any] | None = None,
 ) -> None:
     try:
         await sync_to_async(ChatMessage.objects.create)(
