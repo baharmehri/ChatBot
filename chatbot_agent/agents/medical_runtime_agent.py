@@ -1,39 +1,24 @@
 from __future__ import annotations
 
-from google.adk.tools import FunctionTool
-
-from chatbot_agent.agents.base_agent import BaseAgent
-from chatbot_agent.prompts.medical_prompts import MEDICAL_AGENT_PROMPT
-from chatbot_agent.tools.medical_tools_runtime import *
+from chatbot_agent.agents.supervisor_agent import SupervisorAgent
 
 
-class PersianMedicalAgent(BaseAgent):
+class PersianMedicalAgent:
     """
-    Medical chatbot specialized for answering Persian queries using structured user data.
+    Backwards compatible façade that exposes the old agent interface while delegating to
+    the new supervisor-based multi-agent system.
     """
 
-    def __init__(self, user_id: str):
-        tools = [
-            FunctionTool(add_blood_pressure_measurement),
-            FunctionTool(add_blood_sugar_measurement),
-            FunctionTool(add_weight_measurement),
-            FunctionTool(get_user_profile_summary),
-            FunctionTool(get_medical_history_summary),
-            FunctionTool(get_lifestyle_summary),
-            FunctionTool(get_weight_trend),
-            FunctionTool(get_measurements),
-            FunctionTool(get_labs),
-            FunctionTool(get_medication_schedule),
-        ]
-
-        super().__init__(
-            user_id=user_id,
-            agent_name="PersianMedicalAgent",
-            instruction=MEDICAL_AGENT_PROMPT,
-            tools=tools,
-        )
+    def __init__(self, supervisor: SupervisorAgent):
+        self._supervisor = supervisor
 
     @classmethod
     async def create(cls, user_id: str, session_id: str) -> "PersianMedicalAgent":
-        instance = cls(user_id=user_id)
-        return await instance._async_init(session_id=session_id)
+        supervisor = await SupervisorAgent.create(user_id=user_id, session_id=session_id)
+        return cls(supervisor=supervisor)
+
+    async def call_agent_async(self, query: str) -> str:
+        return await self._supervisor.call_agent_async(query)
+
+    async def reset_session(self, session_id: str) -> None:
+        await self._supervisor.reset_session(session_id=session_id)
