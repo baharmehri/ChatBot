@@ -16,7 +16,7 @@ from telegram.error import TimedOut as TelegramTimedOut
 from asgiref.sync import sync_to_async
 
 from chatbot_agent.agents.medical_runtime_agent import PersianMedicalAgent
-from .models import ChatMessage
+from .models import ChatMessage, ConversationState
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +57,9 @@ async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         agent = await PersianMedicalAgent.create(user_id=user_id, session_id=session_id)
         await agent.reset_session(session_id=session_id)
+        await sync_to_async(_reset_conversation_state_sync)(
+            external_user_id=user_id, session_id=session_id
+        )
     except Exception:  # pragma: no cover - defensive
         logger.exception("Failed to reset session %s", session_id)
         reply = "در بازنشانی گفتگو خطایی رخ داد، لطفاً بعداً دوباره تلاش کنید."
@@ -250,3 +253,9 @@ def _derive_display_name(telegram_user, chat_id: int) -> str:
         if username:
             return username
     return f"Telegram chat {chat_id}"
+
+
+def _reset_conversation_state_sync(*, external_user_id: str, session_id: str) -> None:
+    ConversationState.objects.filter(
+        external_user_id=external_user_id, session_id=session_id
+    ).delete()

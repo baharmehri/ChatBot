@@ -4,7 +4,16 @@ from google.adk.agents import Agent
 from google.adk.models.lite_llm import LiteLlm
 from google.adk.tools import FunctionTool
 
-from chatbot_agent.prompts.medical_prompts import MEDICAL_AGENT_PROMPT
+from chatbot_agent.conversation_state import (
+    default_conversation_state,
+    extract_response_and_state,
+    serialize_state,
+    validate_conversation_state,
+)
+from chatbot_agent.prompts.medical_prompts import (
+    MEDICAL_AGENT_PROMPT,
+    build_dynamic_prompt,
+)
 from chatbot_agent.tools.medical_tools_web_mock import *
 
 DEFAULT_MODEL = "gpt-4o-mini"
@@ -40,3 +49,22 @@ def create_web_agent():
             FunctionTool(add_blood_sugar_measurement),
         ],
     )
+
+
+def build_web_prompt(conversation_state: dict | None, user_message: str) -> str:
+    state = conversation_state or default_conversation_state()
+    if not validate_conversation_state(state):
+        state = default_conversation_state()
+    return build_dynamic_prompt(serialize_state(state), user_message)
+
+
+def parse_web_output(
+    llm_output: str, previous_state: dict | None
+) -> tuple[str, dict]:
+    state = previous_state or default_conversation_state()
+    if not validate_conversation_state(state):
+        state = default_conversation_state()
+    response, updated_state = extract_response_and_state(llm_output, state)
+    if not validate_conversation_state(updated_state):
+        updated_state = state
+    return response, updated_state

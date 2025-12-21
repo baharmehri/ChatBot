@@ -48,3 +48,27 @@ class ChatMessage(models.Model):
 
     def __str__(self) -> str:
         return f"{self.session_id} [{self.role}] @ {self.created_at:%Y-%m-%d %H:%M:%S}"
+
+
+class ConversationState(models.Model):
+    external_user_id = models.CharField(
+        max_length=255,
+        db_index=True,
+        help_text="Identifier supplied by Telegram for the chat user.",
+    )
+    session_id = models.CharField(
+        max_length=255,
+        db_index=True,
+        help_text="Telegram chat/session identifier.",
+    )
+    state = models.JSONField(
+        help_text="Serialized ConversationState JSON for the session.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("external_user_id", "session_id")
+
+    def __str__(self) -> str:
+        return f"{self.session_id} ConversationState @ {self.updated_at:%Y-%m-%d %H:%M:%S}"
