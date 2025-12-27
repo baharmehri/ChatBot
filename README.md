@@ -10,6 +10,7 @@ the available records.
 - Persian medical assistant with strict, data-grounded responses.
 - Telegram integration with `/start`, `/reset`, and free-form chat handling.
 - Session-aware LLM agent backed by `google-adk` runners and LiteLLM.
+- Optional Google ADK web agent with mock tools for staging/debugging.
 - Django admin and custom user model for tracking Telegram users.
 - Structured medical data ingestion from configurable JSON files.
 
@@ -54,7 +55,11 @@ USER_MEDICAL_DATA_PATH=/absolute/path/to/user_data.json
 
 The agent reads structured medical information from the JSON file returned by `USER_MEDICAL_DATA_PATH`. If the variable
 is not set, the default file `user_test_data.json` in the project root is used. Update or replace the JSON file to serve
-different users.
+different users. To read this value from `.env`, add it to `ChatBot/settings.py`:
+
+```python
+USER_MEDICAL_DATA_PATH = os.getenv("USER_MEDICAL_DATA_PATH")
+```
 
 ## Database Setup
 
@@ -92,6 +97,8 @@ python manage.py runtelegrambot
 
 The bot will connect to Telegram, listen for incoming messages, and route conversations to `PersianMedicalAgent`.
 
+If you want both the admin UI and the bot running, start `runserver` and `runtelegrambot` in separate terminals.
+
 ## Telegram Commands
 
 - `/start` – Greets the user and explains the bot.
@@ -113,6 +120,23 @@ All user and assistant messages are logged to the database with metadata for aud
 - Run tests with `python manage.py test`.
 - Logs are stored in the `logs/` directory by default; adjust via `DJANGO_LOG_DIR`.
 
+## Google ADK Web Agent (Staging)
+
+`chatbot_agent/agents/medical_web_agent.py` defines `PersianMedicalWebAgent`, a Google ADK-based agent wired to mock
+medical tools (`chatbot_agent/tools/medical_tools_web_mock.py`). Use it to stage flows or debug prompt behavior without
+modifying real medical records.
+
+For a staging-style environment with higher visibility, set stronger logging and isolate the database:
+
+```dotenv
+DJANGO_DEBUG=False
+DJANGO_LOG_LEVEL=DEBUG
+DJANGO_BACKEND_LOG_LEVEL=DEBUG
+DJANGO_REQUEST_LOG_LEVEL=INFO
+TELEGRAM_BOT_LOG_LEVEL=DEBUG
+DJANGO_DB_NAME=/absolute/path/to/staging.sqlite3
+```
+
 ## Repository Layout
 
 - `ChatBot/` – Django project settings and URLs.
@@ -120,4 +144,3 @@ All user and assistant messages are logged to the database with metadata for aud
 - `telegram_bot/` – Telegram integration, commands, and bot runtime.
 - `users/` – Custom Django user model for Telegram accounts.
 - `*.json` – Sample medical data files used by the agent.
-
