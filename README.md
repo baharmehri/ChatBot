@@ -1,9 +1,9 @@
 # ChatBot
 
 ChatBot is a Django-based backend that powers a Persian-language medical assistant. The project wires together a
-Telegram bot, a custom LLM agent built on top of `google-adk`, and structured medical data stored in JSON files.
-Conversations are persisted in the database, allowing the agent to answer follow-up questions while staying grounded in
-the available records.
+Telegram bot, a supervisor-based multi-agent system built on top of `google-adk`, and structured medical data stored in
+JSON files. Conversations are persisted in the database, allowing the agent to answer follow-up questions while staying
+grounded in the available records.
 
 ## Features
 
@@ -99,6 +99,46 @@ The bot will connect to Telegram, listen for incoming messages, and route conver
 
 If you want both the admin UI and the bot running, start `runserver` and `runtelegrambot` in separate terminals.
 
+## Supervisor-Based Architecture
+
+The medical assistant uses a lightweight **Supervisor Agent** that only routes user requests to focused worker agents.
+The supervisor does not do any medical reasoning and never calls tools directly.
+
+```
+User
+  ↓
+SupervisorAgent
+  ├── ProfileAgent
+  ├── HistoryLifestyleAgent
+  ├── VitalsAgent
+  ├── LabsAgent
+  └── MedicationAgent
+```
+
+### Supervisor responsibilities
+
+- Parse intent and choose a worker based on deterministic rules.
+- Maintain the last successful route to keep context for short follow-ups.
+- Return a fallback message if no domain applies.
+
+Routing rules live in `chatbot_agent/agents/supervisor_routing.py` and match common medical keywords, numeric vitals
+patterns, and Persian domain terms.
+
+### Worker agents
+
+Each worker agent has a small prompt, a minimal toolset, and a single domain:
+
+- `ProfileAgent` → basic profile info (age, gender, height).
+- `HistoryLifestyleAgent` → history and lifestyle factors.
+- `VitalsAgent` → blood pressure, blood sugar, weight, and trends (plus measurement updates).
+- `LabsAgent` → lab results and explanations.
+- `MedicationAgent` → medication schedule and usage details.
+
+The legacy `PersianMedicalAgent` is now a thin façade that instantiates the supervisor and keeps the old interface
+stable. See `chatbot_agent/agents/medical_runtime_agent.py`.
+
+For full design rationale, see `supervisor_multi_agent_design.md`.
+
 ## Telegram Commands
 
 - `/start` – Greets the user and explains the bot.
@@ -140,7 +180,9 @@ DJANGO_DB_NAME=/absolute/path/to/staging.sqlite3
 ## Repository Layout
 
 - `ChatBot/` – Django project settings and URLs.
-- `chatbot_agent/` – Agent definitions, prompts, and medical data helpers.
+- `chatbot_agent/` – Supervisor, worker agents, prompts, and medical data helpers.
+- `chatbot_agent/agents/` – Supervisor routing, worker implementations, and runtime façade.
 - `telegram_bot/` – Telegram integration, commands, and bot runtime.
 - `users/` – Custom Django user model for Telegram accounts.
+- `supervisor_multi_agent_design.md` – Supervisor architecture and refactor plan.
 - `*.json` – Sample medical data files used by the agent.
