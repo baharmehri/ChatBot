@@ -107,6 +107,65 @@ If you want both the admin UI and the bot running, start `runserver` and `runtel
 
 All user and assistant messages are logged to the database with metadata for auditing.
 
+## Conversation State Structure
+
+The agent keeps a structured conversation state to track the current medical topic, the user's intent, and any parsed
+fields. The state is validated and merged in `chatbot_agent/conversation_state.py` so partial updates from the model
+retain previously known values.
+
+State payload shape:
+
+```json
+{
+  "topic": "blood_sugar",
+  "intent": "record_measurement",
+  "known_fields": {
+    "value": 110,
+    "systolic": null,
+    "diastolic": null,
+    "fasting_status": "FBS",
+    "date": "1403-07-15"
+  },
+  "missing_fields": ["date"],
+  "last_action": "asked_for_date"
+}
+```
+
+Key details:
+
+- `topic` must be one of: `blood_sugar`, `blood_pressure`, `weight`, `labs`, `medication`, `lifestyle`, `profile`, or
+  `null`.
+- `intent` must be one of: `check_status`, `record_measurement`, `analyze`, `explain`, or `null`.
+- `known_fields` always includes `value`, `systolic`, `diastolic`, `fasting_status`, and `date` (null when unknown).
+- `fasting_status` must be one of: `FBS`, `PBS`, `RBS`, or `null`.
+- `missing_fields` is a list of strings indicating which fields are still required for the current intent.
+- `last_action` is optional text describing the last system-driven prompt or step.
+
+When the LLM returns a response, it can include a `STATE:` JSON block after `RESPONSE:`. The parser extracts and
+validates that state, then merges it with the previous state so any omitted fields remain intact.
+
+### Why use this structure?
+
+This schema keeps the assistant grounded, predictable, and easy to evolve. Instead of relying on implicit chat history,
+the agent stores explicit, validated fields (topic, intent, measurements) that are safe to carry across turns and
+auditable in logs. The merge behavior lets the model supply partial updates while preserving known facts, which is
+critical for multi-turn data capture.
+
+Pros:
+
+- Consistent payload shape simplifies validation, persistence, and testing.
+- Safer handling of partial answers; missing values remain explicit.
+- Clear separation between intent (what the user wants) and fields (what is known).
+- Easier prompt steering and error recovery when the model returns malformed output.
+- Extensible: new fields or intents can be added without changing the rest of the pipeline.
+
+Cons:
+
+- Requires upfront schema design and careful validation logic.
+- Adds overhead to prompts and parsing (more JSON handling).
+- If the schema is too rigid, it can block novel or unexpected user inputs.
+- Schema changes require versioning/migration if old conversation states are stored.
+
 ## Development Tips
 
 - Use `/reset` before starting a new medical query if you want to ignore previous answers.
